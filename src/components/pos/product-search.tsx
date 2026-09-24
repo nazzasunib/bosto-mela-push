@@ -23,9 +23,14 @@ function exactMatches(products: Product[], term: string): Product[] {
   return products.filter((p) => normalizeCode(p.code) === t);
 }
 
+/** Nothing typed yet → browse list of every active product, in-stock first. */
+function browse(products: Product[]): Product[] {
+  return products.filter((p) => p.status === "active").sort((a, b) => Number(b.stock_quantity > 0) - Number(a.stock_quantity > 0) || a.name.localeCompare(b.name));
+}
+
 function fuzzy(products: Product[], term: string): Product[] {
   const t = term.trim().toLowerCase();
-  if (!t) return [];
+  if (!t) return browse(products);
   const words = t.split(/\s+/);
   return products
     .map((p) => {
@@ -54,7 +59,12 @@ export const ProductSearch = forwardRef<ProductSearchHandle, Props>(function Pro
   const results = useMemo(() => fuzzy(products, term), [products, term]);
 
   const commit = (picked?: Product) => {
-    if (!term) return;
+    if (!term) {
+      // empty box: only a clicked / arrow-selected product from the browse list can be added
+      const p = picked ?? (navigated && open ? results[hi] : undefined);
+      if (p) { onPick([p], 1, p.code); setHi(0); setNavigated(false); setOpen(false); }
+      return;
+    }
     const parts = picked ? [] : parseMultiInput(value);
     // only treat as multi-entry when every part is an exact code/barcode (so "Cotton Panjabi*2" still searches by name)
     const multi = parts.length > 1 && parts.every((m) => exactMatches(products, m.term).length > 0) ? parts : [];
@@ -75,7 +85,7 @@ export const ProductSearch = forwardRef<ProductSearchHandle, Props>(function Pro
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") { e.preventDefault(); commit(); }
-    else if (e.key === "ArrowDown") { e.preventDefault(); setOpen(true); setNavigated(true); setHi((h) => Math.min(h + 1, results.length - 1)); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); setNavigated(true); if (!open) { setOpen(true); setHi(0); } else setHi((h) => Math.min(h + 1, results.length - 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setNavigated(true); setHi((h) => Math.max(h - 1, 0)); }
     else if (e.key === "Escape") { if (value) { e.stopPropagation(); setValue(""); } setOpen(false); }
   };
@@ -86,14 +96,14 @@ export const ProductSearch = forwardRef<ProductSearchHandle, Props>(function Pro
         className="relative flex items-center rounded-2xl border-2 border-blue/20 bg-card shadow-soft transition focus-within:border-blue focus-within:shadow-[0_0_0_4px_rgb(37_99_235/0.12)]">
         <ScanLine className="ml-4 size-6 shrink-0 text-blue" />
         <input ref={inputRef} value={value} autoFocus autoComplete="off" spellCheck={false} placeholder="Search or scan product…  (e.g. BSS*2)"
-          onChange={(e) => { setValue(e.target.value); setOpen(true); setHi(0); setNavigated(false); }} onKeyDown={onKeyDown} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onChange={(e) => { setValue(e.target.value); setOpen(true); setHi(0); setNavigated(false); }} onKeyDown={onKeyDown} onClick={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)}
           className="h-16 w-full bg-transparent px-4 text-lg font-semibold text-navy outline-none placeholder:font-normal placeholder:text-muted-foreground/70" aria-label="Search or scan product" />
         {quantity > 1 && term && <span className="mr-2 shrink-0 rounded-lg bg-blue px-2.5 py-1 text-sm font-bold text-white">× {quantity}</span>}
         <kbd className="mr-4 hidden shrink-0 items-center gap-1 rounded-lg bg-muted px-2 py-1 text-xs font-bold text-muted-foreground sm:flex"><CornerDownLeft className="size-3" />Enter</kbd>
       </motion.div>
 
       <AnimatePresence>
-        {open && term && (
+        {open && (term || results.length > 0) && (
           <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.12 }}
             className="absolute inset-x-0 top-[calc(100%+8px)] z-30 overflow-hidden rounded-2xl border bg-popover shadow-lift">
             {results.length === 0 ? (
@@ -102,7 +112,7 @@ export const ProductSearch = forwardRef<ProductSearchHandle, Props>(function Pro
               <ul className="max-h-[360px] overflow-y-auto scrollbar-thin p-1.5">
                 {results.map((p, i) => (
                   <li key={p.id}>
-                    <button onMouseDown={(e) => e.preventDefault()} onMouseEnter={() => setHi(i)} onClick={() => commit(p)}
+                    <button ref={i === hi && navigated ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined} onMouseDown={(e) => e.preventDefault()} onMouseEnter={() => setHi(i)} onClick={() => commit(p)}
                       className={cn("flex w-full cursor-pointer items-center gap-3 rounded-xl p-2.5 text-left transition-colors", i === hi ? "bg-accent" : "hover:bg-muted")}>
                       <div className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-lg bg-secondary text-royal">
                         {p.image_url ? <img src={p.image_url} alt="" className="size-full object-cover" /> : <Barcode className="size-5" />}
@@ -120,7 +130,7 @@ export const ProductSearch = forwardRef<ProductSearchHandle, Props>(function Pro
                 ))}
               </ul>
             )}
-            <div className="flex items-center gap-4 border-t bg-muted/50 px-4 py-2 text-[11px] text-muted-foreground"><span><b>↑↓</b> select</span><span><b>Enter</b> add</span><span><b>CODE*3</b> quantity</span><span className="ml-auto flex items-center gap-1"><Search className="size-3" />{results.length} found</span></div>
+            <div className="flex items-center gap-4 border-t bg-muted/50 px-4 py-2 text-[11px] text-muted-foreground"><span><b>↑↓</b> select</span><span><b>Enter</b> add</span><span><b>CODE*3</b> quantity</span><span className="ml-auto flex items-center gap-1"><Search className="size-3" />{term ? `${results.length} found` : `${results.length} products · type to search`}</span></div>
           </motion.div>
         )}
       </AnimatePresence>

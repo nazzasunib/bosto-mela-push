@@ -8,7 +8,7 @@ import type { CartItem } from "@/lib/types";
 
 interface Props {
   items: CartItem[]; lastAdded: string | null;
-  onQty: (id: string, qty: number) => void; onPrice: (id: string, price: number) => void; onDiscount: (id: string, d: number) => void; onRemove: (id: string) => void;
+  onQty: (id: string, qty: number) => void; onSize: (id: string, size: string) => void; onPrice: (id: string, price: number) => void; onDiscount: (id: string, d: number) => void; onRemove: (id: string) => void;
 }
 
 function QtyControl({ item, onQty }: { item: CartItem; onQty: (id: string, q: number) => void }) {
@@ -18,6 +18,24 @@ function QtyControl({ item, onQty }: { item: CartItem; onQty: (id: string, q: nu
       <input type="number" min={1} max={item.stock} value={item.quantity} onChange={(e) => onQty(item.productId, Number(e.target.value))} onFocus={(e) => e.target.select()}
         className="h-9 w-12 border-x bg-transparent text-center text-sm font-bold tabular text-navy outline-none focus:bg-accent/40" aria-label="Quantity" />
       <button onClick={() => onQty(item.productId, item.quantity + 1)} disabled={item.quantity >= item.stock} className="grid size-9 cursor-pointer place-items-center rounded-r-xl text-navy transition hover:bg-accent disabled:opacity-30" aria-label="Increase"><Plus className="size-3.5" /></button>
+    </div>
+  );
+}
+
+function SizePicker({ item, onSize }: { item: CartItem; onSize: (id: string, size: string) => void }) {
+  const sizes = item.sizes ?? [];
+  if (sizes.length === 0) return <span className="text-muted-foreground">{item.size || "—"}</span>;
+  return (
+    <div className="flex max-w-[200px] flex-wrap gap-1" role="radiogroup" aria-label={`Size for ${item.name}`}>
+      {sizes.map((z) => {
+        const active = item.size === z;
+        return (
+          <button key={z} type="button" role="radio" aria-checked={active} onClick={() => onSize(item.productId, active ? "" : z)}
+            className={cn("h-7 min-w-8 cursor-pointer rounded-lg border px-1.5 text-xs font-bold transition", active ? "border-navy bg-navy text-white" : "bg-card text-navy hover:border-blue/50 hover:bg-accent", !item.size && "border-amber-300")}>
+            {z}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -42,7 +60,7 @@ function DiscountInput({ item, onDiscount }: { item: CartItem; onDiscount: (id: 
   );
 }
 
-export function POSCart({ items, lastAdded, onQty, onPrice, onDiscount, onRemove }: Props) {
+export function POSCart({ items, lastAdded, onQty, onSize, onPrice, onDiscount, onRemove }: Props) {
   if (items.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center py-16 text-center">
@@ -68,7 +86,7 @@ export function POSCart({ items, lastAdded, onQty, onPrice, onDiscount, onRemove
                 <motion.tr key={i.productId} layout initial={{ opacity: 0, backgroundColor: "rgba(37,99,235,0.12)" }} animate={{ opacity: 1, backgroundColor: lastAdded === i.productId ? "rgba(37,99,235,0.06)" : "rgba(255,255,255,0)" }} exit={{ opacity: 0, x: 24 }} transition={{ duration: 0.25 }} className="border-b border-border/60">
                   <td className="px-4 py-2.5"><p className="max-w-[220px] truncate font-semibold text-navy">{i.name}</p><p className={cn("text-[11px]", i.stock <= i.quantity ? "text-amber-600" : "text-muted-foreground")}>{i.stock} in stock</p></td>
                   <td className="px-2 py-2.5 font-mono text-xs font-bold text-royal">{i.code}</td>
-                  <td className="px-2 py-2.5">{i.size || "—"}</td>
+                  <td className="px-2 py-2.5"><SizePicker item={i} onSize={onSize} /></td>
                   <td className="px-2 py-2.5">{i.color || "—"}</td>
                   <td className="px-2 py-2.5 text-center"><QtyControl item={i} onQty={onQty} /></td>
                   <td className="px-2 py-2.5 text-right tabular text-muted-foreground">{taka(i.costPrice)}</td>
@@ -88,7 +106,7 @@ export function POSCart({ items, lastAdded, onQty, onPrice, onDiscount, onRemove
           {items.map((i) => (
             <motion.div key={i.productId} layout initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: 24 }} className="space-y-3 p-4">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0"><p className="truncate font-semibold text-navy">{i.name}</p><p className="text-xs text-muted-foreground"><span className="font-mono font-bold text-royal">{i.code}</span>{i.size && ` · ${i.size}`}{i.color && ` · ${i.color}`} · cost {taka(i.costPrice)}</p></div>
+                <div className="min-w-0"><p className="truncate font-semibold text-navy">{i.name}</p><p className="text-xs text-muted-foreground"><span className="font-mono font-bold text-royal">{i.code}</span>{i.color && ` · ${i.color}`} · cost {taka(i.costPrice)}</p>{(i.sizes?.length ?? 0) > 0 && <div className="mt-2"><SizePicker item={i} onSize={onSize} /></div>}</div>
                 <button onClick={() => onRemove(i.productId)} className="rounded-lg p-2 text-muted-foreground hover:bg-red-50 hover:text-red-600 cursor-pointer" aria-label="Remove"><Trash2 className="size-4" /></button>
               </div>
               <div className="flex items-center justify-between gap-2"><QtyControl item={i} onQty={onQty} /><PriceInput item={i} onPrice={onPrice} /><DiscountInput item={i} onDiscount={onDiscount} /><p className="font-bold tabular text-navy">{taka(lineTotal(i))}</p></div>

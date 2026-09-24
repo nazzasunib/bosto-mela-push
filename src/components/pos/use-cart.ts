@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { cartTotals, normalizeUnitPrice } from "@/lib/calc";
+import { parseSizes } from "@/lib/format";
 import type { CartItem, PaymentMethod, Product } from "@/lib/types";
 
 const KEY = "bm.pos.draft.v1";
@@ -9,8 +10,11 @@ interface Draft { ref: string; items: CartItem[]; orderDiscount: number; method:
 const newRef = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 const empty = (): Draft => ({ ref: newRef(), items: [], orderDiscount: 0, method: "cash", paid: "", phone: "" });
 
+/** A size is preselected only when the product comes in exactly one. */
+const pickSize = (sizes: string[], wanted?: string) => (wanted && sizes.includes(wanted) ? wanted : sizes.length === 1 ? sizes[0] : "");
+
 export const toCartItem = (p: Product, quantity: number): CartItem => ({
-  productId: p.id, name: p.name, code: p.code, size: p.size, color: p.color, costPrice: p.cost_price, price: normalizeUnitPrice(p.selling_price),
+  productId: p.id, name: p.name, code: p.code, size: pickSize(parseSizes(p.size)), sizes: parseSizes(p.size), color: p.color, costPrice: p.cost_price, price: normalizeUnitPrice(p.selling_price),
   quantity, discount: 0, stock: p.stock_quantity, imageUrl: p.image_url,
 });
 
@@ -24,7 +28,8 @@ function restore(products: Product[]): Draft {
     const byId = new Map(products.map((p) => [p.id, p]));
     const items = (saved.items ?? []).flatMap((i) => {
       const p = byId.get(i.productId);
-      return p ? [{ ...i, name: p.name, price: normalizeUnitPrice(i.price || p.selling_price), costPrice: p.cost_price, quantity: Math.max(1, Math.min(i.quantity, p.stock_quantity || i.quantity)) }] : [];
+      const sizes = parseSizes(p?.size);
+      return p ? [{ ...i, name: p.name, sizes, size: pickSize(sizes, i.size), price: normalizeUnitPrice(i.price || p.selling_price), costPrice: p.cost_price, quantity: Math.max(1, Math.min(i.quantity, p.stock_quantity || i.quantity)) }] : [];
     });
     return { ...empty(), ...saved, items, ref: saved.ref || newRef() };
   } catch {
@@ -45,7 +50,7 @@ export function useCart(products: Product[]) {
 
   // stock always comes from the latest product data
   const byId = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
-  const items = useMemo(() => draft.items.map((i) => { const p = byId.get(i.productId); return p ? { ...i, stock: p.stock_quantity } : i; }), [draft.items, byId]);
+  const items = useMemo(() => draft.items.map((i) => { const p = byId.get(i.productId); return p ? { ...i, stock: p.stock_quantity, sizes: parseSizes(p.size) } : i; }), [draft.items, byId]);
 
   const add = useCallback((p: Product, qty: number): AddResult => {
     const inCart = items.find((i) => i.productId === p.id)?.quantity ?? 0;
@@ -66,12 +71,13 @@ export function useCart(products: Product[]) {
   }, [byId]);
   const setPrice = useCallback((id: string, price: number) => setDraft((d) => ({ ...d, items: d.items.map((i) => (i.productId === id ? { ...i, price: normalizeUnitPrice(price) } : i)) })), []);
   const setDiscount = useCallback((id: string, disc: number) => setDraft((d) => ({ ...d, items: d.items.map((i) => (i.productId === id ? { ...i, discount: Math.max(0, Math.min(disc || 0, i.price * i.quantity)) } : i)) })), []);
+  const setSize = useCallback((id: string, size: string) => setDraft((d) => ({ ...d, items: d.items.map((i) => (i.productId === id ? { ...i, size } : i)) })), []);
   const remove = useCallback((id: string) => setDraft((d) => ({ ...d, items: d.items.filter((i) => i.productId !== id) })), []);
   const clear = useCallback(() => setDraft(empty()), []);
   const patch = useCallback((p: Partial<Omit<Draft, "items" | "ref">>) => setDraft((d) => ({ ...d, ...p })), []);
 
   const totals = useMemo(() => cartTotals(items, draft.orderDiscount), [items, draft.orderDiscount]);
-  return { ...draft, items, totals, add, setQty, setPrice, setDiscount, remove, clear, patch };
+  return { ...draft, items, totals, add, setQty, setPrice, setDiscount, setSize, remove, clear, patch };
 }
 
 export type Cart = ReturnType<typeof useCart>;

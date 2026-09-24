@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
-import { ImagePlus, Loader2, RefreshCw, Save, Sparkles, X } from "lucide-react";
+import { Check, ImagePlus, Loader2, Plus, RefreshCw, Save, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -9,10 +9,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Field } from "@/components/common/field";
 import { decodeCostCode, normalizeCode } from "@/lib/code-parser";
 import { saveProduct, uploadProductImage } from "@/lib/actions/catalog";
-import { taka } from "@/lib/format";
+import { joinSizes, parseSizes, SIZE_OPTIONS, taka } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { Product, ProductStatus } from "@/lib/types";
 
+const NEW_CAT = "__new__";
 const genBarcode = () => `2${Date.now().toString().slice(-10)}${Math.floor(Math.random() * 10)}`;
+
+function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} aria-pressed={active}
+      className={cn("inline-flex h-9 min-w-11 cursor-pointer items-center justify-center gap-1 rounded-xl border px-3 text-sm font-semibold transition", active ? "border-navy bg-navy text-white shadow-xs" : "bg-card text-navy hover:border-blue/50 hover:bg-accent")}>
+      {active && <Check className="size-3.5" />}{children}
+    </button>
+  );
+}
 
 export function ProductForm({ open, onOpenChange, product, categories }: { open: boolean; onOpenChange: (o: boolean) => void; product: Product | null; categories: string[] }) {
   return (
@@ -35,6 +46,12 @@ function ProductFormBody({ product, categories, onDone }: { product: Product | n
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [newCat, setNewCat] = useState(false);
+  const categoryOptions = f.category && !categories.includes(f.category) && !newCat ? [f.category, ...categories] : categories;
+  const sizes = parseSizes(f.size);
+  // keep any non-standard size an older product already has (e.g. "32") selectable
+  const sizeOptions = [...SIZE_OPTIONS, ...parseSizes(product?.size).filter((z) => !(SIZE_OPTIONS as readonly string[]).includes(z))];
+  const toggleSize = (z: string) => setF((s) => { const cur = parseSizes(s.size); return { ...s, size: joinSizes(cur.includes(z) ? cur.filter((x) => x !== z) : [...cur, z]) }; });
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF((s) => ({ ...s, [k]: e.target.value }));
 
   const decoded = decodeCostCode(f.code);
@@ -70,11 +87,25 @@ function ProductFormBody({ product, categories, onDone }: { product: Product | n
             <Input id="p-code" value={f.code} onChange={(e) => { const code = normalizeCode(e.target.value); setF((s) => ({ ...s, code })); if (decodeCostCode(code) === null && code) setManualCost(true); }} placeholder="BSS" className="font-mono text-base font-bold uppercase" required />
           </Field>
           <Field label="Category" htmlFor="p-cat">
-            <Input id="p-cat" list="bm-categories" value={f.category} onChange={set("category")} placeholder="Panjabi, Shirt, Saree…" />
-            <datalist id="bm-categories">{categories.map((c) => <option key={c} value={c} />)}</datalist>
+            {newCat || categories.length === 0 ? (
+              <div className="flex gap-2">
+                <Input id="p-cat" value={f.category} onChange={set("category")} placeholder="New category, e.g. Panjabi" autoFocus={newCat} />
+                {categories.length > 0 && <Button type="button" variant="outline" size="icon" onClick={() => { setNewCat(false); setF((s) => ({ ...s, category: product?.category ?? "" })); }} title="Choose existing"><X /></Button>}
+              </div>
+            ) : (
+              <Select value={f.category} onValueChange={(v) => { if (v === NEW_CAT) { setNewCat(true); setF((s) => ({ ...s, category: "" })); } else setF((s) => ({ ...s, category: v })); }}>
+                <SelectTrigger id="p-cat"><SelectValue placeholder="Select category" /></SelectTrigger>
+                <SelectContent>
+                  {categoryOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  <SelectItem value={NEW_CAT} className="font-semibold text-blue"><span className="flex items-center gap-1.5"><Plus className="size-3.5" />New category…</span></SelectItem>
+                </SelectContent>
+              </Select>
+            )}
           </Field>
-          <Field label="Size" htmlFor="p-size"><Input id="p-size" value={f.size} onChange={set("size")} placeholder="S, M, L, XL, 32…" /></Field>
           <Field label="Color" htmlFor="p-color"><Input id="p-color" value={f.color} onChange={set("color")} placeholder="Navy" /></Field>
+          <Field label="Sizes (optional)" hint={sizes.length ? `Selected: ${joinSizes(sizes).replaceAll(",", ", ")}` : "Tap the sizes this product comes in."} className="sm:col-span-2">
+            <div className="flex flex-wrap gap-2">{sizeOptions.map((z) => <Chip key={z} active={sizes.includes(z)} onClick={() => toggleSize(z)}>{z}</Chip>)}</div>
+          </Field>
         </div>
         <div className="grid content-start gap-1.5">
           <span className="text-[13px] font-semibold text-foreground/80">Image</span>
@@ -102,7 +133,7 @@ function ProductFormBody({ product, categories, onDone }: { product: Product | n
         {product ? (
           <Field label="Current stock" hint="Change stock from the Stock page"><Input value={product.stock_quantity} readOnly className="bg-muted" /></Field>
         ) : (
-          <Field label="Opening stock" htmlFor="p-stock"><Input id="p-stock" type="number" min={0} value={f.initialStock} onChange={set("initialStock")} placeholder="0" /></Field>
+          <Field label="Quantity (pieces)" htmlFor="p-stock" hint="How many pieces you have in stock now."><Input id="p-stock" type="number" min={0} step={1} value={f.initialStock} onChange={set("initialStock")} placeholder="e.g. 20" /></Field>
         )}
       </div>
 

@@ -9,7 +9,7 @@ const METHODS: PaymentMethod[] = ["cash", "bkash", "nagad", "card", "other"];
 const REASONS: ReturnReason[] = ["size_issue", "defective", "wrong_product", "changed_mind", "other"];
 
 export interface CompleteSaleInput {
-  items: { productId: string; quantity: number; discount: number; unitPrice?: number }[];
+  items: { productId: string; quantity: number; discount: number; unitPrice?: number; size?: string }[];
   orderDiscount: number; paymentMethod: PaymentMethod; amountPaid: number;
   customerName?: string; customerPhone?: string; note?: string; clientRef?: string;
 }
@@ -24,6 +24,7 @@ export async function completeSale(input: CompleteSaleInput): Promise<ActionResu
       quantity: Math.trunc(numVal(i.quantity)),
       discount: Math.max(numVal(i.discount) || 0, 0),
       unit_price: Math.max(numVal(i.unitPrice ?? 0) || 0, 0),
+      size: str(i.size, 30),
     }));
     ensure(items.every((i) => i.quantity > 0), "Every item needs a quantity of at least 1.");
     const { data, error } = await db().rpc("complete_sale", {

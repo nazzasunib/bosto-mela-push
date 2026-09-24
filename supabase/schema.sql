@@ -214,7 +214,8 @@ end $$;
 
 drop function if exists public.complete_sale(jsonb, numeric, text, numeric, uuid, text, text, text);
 -- Complete a sale: validates stock, stores sale + items, reduces stock, logs movements.
--- p_items: [{ "product_id": uuid, "quantity": int, "discount": number, "unit_price": number }]
+-- p_items: [{ "product_id": uuid, "quantity": int, "discount": number, "unit_price": number, "size": text }]
+-- "size" is the size picked at the counter; when blank the product's size list is stored.
 create or replace function public.complete_sale(
   p_items jsonb, p_order_discount numeric, p_payment_method text, p_amount_paid numeric,
   p_user uuid default null, p_customer_name text default null, p_customer_phone text default null, p_note text default null,
@@ -274,7 +275,7 @@ begin
     v_alloc := least(v_alloc, v_line); v_alloc_left := v_alloc_left - v_alloc;
     v_net := v_line - v_alloc;
     insert into public.sale_items (sale_id, product_id, product_name, product_code, size, color, quantity, unit_cost, unit_price, discount, line_total, net_total, cost_total, profit)
-    values (v_sale_id, v_prod.id, v_prod.name, v_prod.code, v_prod.size, v_prod.color, v_qty, v_prod.cost_price, v_unit_price, v_disc, v_line, v_net, v_prod.cost_price * v_qty, v_net - v_prod.cost_price * v_qty);
+    values (v_sale_id, v_prod.id, v_prod.name, v_prod.code, coalesce(nullif(trim(v_item->>'size'), ''), v_prod.size), v_prod.color, v_qty, v_prod.cost_price, v_unit_price, v_disc, v_line, v_net, v_prod.cost_price * v_qty, v_net - v_prod.cost_price * v_qty);
     update public.products set stock_quantity = stock_quantity - v_qty, updated_at = now() where id = v_prod.id returning stock_quantity into v_new_stock;
     insert into public.stock_movements (product_id, quantity, type, reference, balance_after, user_id) values (v_prod.id, -v_qty, 'sale', v_invoice, v_new_stock, p_user);
   end loop;

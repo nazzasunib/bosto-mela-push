@@ -54,7 +54,8 @@ export interface DailyClosing {
 }
 
 export interface CartItem {
-  productId: string; name: string; code: string; size: string; color: string;
+  /** `size` is the size chosen for this sale; `sizes` are the sizes the product comes in. */
+  productId: string; name: string; code: string; size: string; sizes?: string[]; color: string;
   costPrice: number; price: number; quantity: number; discount: number; stock: number; imageUrl: string | null;
 }
 

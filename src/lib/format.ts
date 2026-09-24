@@ -25,3 +25,11 @@ export function errorMessage(e: unknown): string {
   if (typeof e === "object" && e && "message" in e && typeof (e as { message: unknown }).message === "string") return (e as { message: string }).message;
   return "Something went wrong. Please try again.";
 }
+
+export const SIZE_OPTIONS = ["S", "M", "L", "XL", "XXL", "3XL"] as const;
+/** "M, L,xl" → ["M","L","XL"] — products store their available sizes as one comma separated string. */
+export const parseSizes = (s: string | null | undefined) => [...new Set((s ?? "").split(",").map((x) => x.trim().toUpperCase()).filter(Boolean))];
+export const joinSizes = (sizes: string[]) => {
+  const order = (x: string) => { const i = (SIZE_OPTIONS as readonly string[]).indexOf(x); return i < 0 ? 99 : i; };
+  return [...sizes].sort((a, b) => order(a) - order(b)).join(",");
+};
