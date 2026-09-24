@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { decodeCostCode, encodeCostCode, isCostCode, parseMultiInput, parseQuantityInput } from "../code-parser";
+import { decodeCostCode, encodeCostCode, isCostCode, matchCode, parseMultiInput, parseQuantityInput } from "../code-parser";
 import { cartTotals, changeDue, lineProfit, netProfit, normalizeUnitPrice, refundFor } from "../calc";
 import { addDays, dayStartISO, resolveRange } from "../dates";
-import type { CartItem } from "../types";
+import type { CartItem, Product } from "../types";
 
 describe("product code parser", () => {
   it("decodes the shop mapping", () => {
@@ -84,5 +84,24 @@ describe("dates", () => {
     expect(addDays("2026-02-28", 1)).toBe("2026-03-01");
     const r = resolveRange("custom", "2026-09-10", "2026-09-01");
     expect(r).toEqual({ from: "2026-09-01", to: "2026-09-10" });
+  });
+});
+
+describe("matchCode (cart code → product of the same category)", () => {
+  const prod = (p: Partial<Product>): Product => ({ id: "id", name: "Shirt", code: "BSSS", category: "Shirt", size: "", color: "", cost_price: 1000, selling_price: 0, stock_quantity: 5, barcode: null, image_url: null, status: "active", created_at: "", updated_at: "", ...p });
+  const list = [
+    prod({ id: "a", code: "DAS", cost_price: 780 }),
+    prod({ id: "b", code: "BSSS-2", cost_price: 1000, stock_quantity: 0 }),
+    prod({ id: "c", code: "BSSS-1", cost_price: 1000, stock_quantity: 3 }),
+    prod({ id: "d", code: "BSSS", category: "Panjabi" }),
+  ];
+  it("matches by decoded cost inside the category, in-stock first", () => {
+    expect(matchCode(list, "shirt", "bsss").map((p) => p.id)).toEqual(["c", "b"]);
+  });
+  it("prefers an exact code match", () => {
+    expect(matchCode(list, "Shirt", "DAS").map((p) => p.id)).toEqual(["a"]);
+  });
+  it("never crosses categories", () => {
+    expect(matchCode(list, "Saree", "BSSS")).toEqual([]);
   });
 });

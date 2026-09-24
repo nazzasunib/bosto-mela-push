@@ -1,14 +1,16 @@
 "use client";
+import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
-import { lineTotal } from "@/lib/calc";
+import { lineTotal, round2 } from "@/lib/calc";
+import { normalizeCode } from "@/lib/code-parser";
 import { taka } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { CartItem } from "@/lib/types";
 
 interface Props {
   items: CartItem[]; lastAdded: string | null;
-  onQty: (id: string, qty: number) => void; onSize: (id: string, size: string) => void; onPrice: (id: string, price: number) => void; onDiscount: (id: string, d: number) => void; onRemove: (id: string) => void;
+  onQty: (id: string, qty: number) => void; onSize: (id: string, size: string) => void; onCode: (id: string, code: string) => boolean; onPrice: (id: string, price: number) => void; onDiscount: (id: string, d: number) => void; onRemove: (id: string) => void;
 }
 
 function QtyControl({ item, onQty }: { item: CartItem; onQty: (id: string, q: number) => void }) {
@@ -20,6 +22,28 @@ function QtyControl({ item, onQty }: { item: CartItem; onQty: (id: string, q: nu
       <button onClick={() => onQty(item.productId, item.quantity + 1)} disabled={item.quantity >= item.stock} className="grid size-9 cursor-pointer place-items-center rounded-r-xl text-navy transition hover:bg-accent disabled:opacity-30" aria-label="Increase"><Plus className="size-3.5" /></button>
     </div>
   );
+}
+
+/** Editable cost code: typing another code (e.g. BSSS) switches the line to that-priced product of the same category. */
+function CodeInput({ item, onCode }: { item: CartItem; onCode: (id: string, code: string) => boolean }) {
+  const [value, setValue] = useState(item.code);
+  const [prev, setPrev] = useState(item.code);
+  if (prev !== item.code) { setPrev(item.code); setValue(item.code); }
+  const apply = () => { const c = normalizeCode(value); if (!c || c === normalizeCode(item.code) || !onCode(item.productId, c)) setValue(item.code); };
+  return (
+    <input value={value} onChange={(e) => setValue(normalizeCode(e.target.value))} onFocus={(e) => e.target.select()} onBlur={apply}
+      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } else if (e.key === "Escape") { setValue(item.code); } }}
+      title="Type a cost code to pick the matching product of this category" aria-label={`Code for ${item.name}`}
+      className="h-9 w-20 rounded-xl border border-dashed border-royal/30 bg-card px-2 font-mono text-xs font-bold text-royal uppercase outline-none focus:border-solid focus:border-blue focus:ring-2 focus:ring-blue/15" />
+  );
+}
+
+const lineProfit = (i: CartItem) => round2(lineTotal(i) - i.costPrice * i.quantity);
+
+function Profit({ item }: { item: CartItem }) {
+  if (!item.price) return <span className="text-muted-foreground">—</span>;
+  const p = lineProfit(item);
+  return <span className={cn("font-semibold tabular", p < 0 ? "text-red-600" : "text-emerald-700")}>{p < 0 ? "−" : "+"}{taka(Math.abs(p))}</span>;
 }
 
 function SizePicker({ item, onSize }: { item: CartItem; onSize: (id: string, size: string) => void }) {
@@ -60,7 +84,7 @@ function DiscountInput({ item, onDiscount }: { item: CartItem; onDiscount: (id: 
   );
 }
 
-export function POSCart({ items, lastAdded, onQty, onSize, onPrice, onDiscount, onRemove }: Props) {
+export function POSCart({ items, lastAdded, onQty, onSize, onCode, onPrice, onDiscount, onRemove }: Props) {
   if (items.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center py-16 text-center">
@@ -77,7 +101,7 @@ export function POSCart({ items, lastAdded, onQty, onSize, onPrice, onDiscount, 
           <thead className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur">
             <tr className="border-b text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
               <th className="px-4 py-3 text-left">Product</th><th className="px-2 py-3 text-left">Code</th><th className="px-2 py-3 text-left">Size</th><th className="px-2 py-3 text-left">Color</th>
-              <th className="px-2 py-3 text-center">Qty</th><th className="px-2 py-3 text-right">Cost</th><th className="px-2 py-3 text-right">Price</th><th className="px-2 py-3 text-right">Discount</th><th className="px-2 py-3 text-right">Total</th><th className="w-12 px-2 py-3" />
+              <th className="px-2 py-3 text-center">Qty</th><th className="px-2 py-3 text-right">Cost</th><th className="px-2 py-3 text-right">Price</th><th className="px-2 py-3 text-right">Discount</th><th className="px-2 py-3 text-right">Total</th><th className="px-2 py-3 text-right">Profit</th><th className="w-12 px-2 py-3" />
             </tr>
           </thead>
           <tbody>
@@ -85,7 +109,7 @@ export function POSCart({ items, lastAdded, onQty, onSize, onPrice, onDiscount, 
               {items.map((i) => (
                 <motion.tr key={i.productId} layout initial={{ opacity: 0, backgroundColor: "rgba(37,99,235,0.12)" }} animate={{ opacity: 1, backgroundColor: lastAdded === i.productId ? "rgba(37,99,235,0.06)" : "rgba(255,255,255,0)" }} exit={{ opacity: 0, x: 24 }} transition={{ duration: 0.25 }} className="border-b border-border/60">
                   <td className="px-4 py-2.5"><p className="max-w-[220px] truncate font-semibold text-navy">{i.name}</p><p className={cn("text-[11px]", i.stock <= i.quantity ? "text-amber-600" : "text-muted-foreground")}>{i.stock} in stock</p></td>
-                  <td className="px-2 py-2.5 font-mono text-xs font-bold text-royal">{i.code}</td>
+                  <td className="px-2 py-2.5"><CodeInput item={i} onCode={onCode} /></td>
                   <td className="px-2 py-2.5"><SizePicker item={i} onSize={onSize} /></td>
                   <td className="px-2 py-2.5">{i.color || "—"}</td>
                   <td className="px-2 py-2.5 text-center"><QtyControl item={i} onQty={onQty} /></td>
@@ -93,6 +117,7 @@ export function POSCart({ items, lastAdded, onQty, onSize, onPrice, onDiscount, 
                   <td className="px-2 py-2.5 text-right"><PriceInput item={i} onPrice={onPrice} /></td>
                   <td className="px-2 py-2.5 text-right"><DiscountInput item={i} onDiscount={onDiscount} /></td>
                   <td className="px-2 py-2.5 text-right font-bold tabular text-navy">{taka(lineTotal(i))}</td>
+                  <td className="px-2 py-2.5 text-right"><Profit item={i} /></td>
                   <td className="px-2 py-2.5 text-center"><button onClick={() => onRemove(i.productId)} className="grid size-9 cursor-pointer place-items-center rounded-xl text-muted-foreground transition hover:bg-red-50 hover:text-red-600" aria-label={`Remove ${i.name}`}><Trash2 className="size-4" /></button></td>
                 </motion.tr>
               ))}
@@ -106,7 +131,7 @@ export function POSCart({ items, lastAdded, onQty, onSize, onPrice, onDiscount, 
           {items.map((i) => (
             <motion.div key={i.productId} layout initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: 24 }} className="space-y-3 p-4">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0"><p className="truncate font-semibold text-navy">{i.name}</p><p className="text-xs text-muted-foreground"><span className="font-mono font-bold text-royal">{i.code}</span>{i.color && ` · ${i.color}`} · cost {taka(i.costPrice)}</p>{(i.sizes?.length ?? 0) > 0 && <div className="mt-2"><SizePicker item={i} onSize={onSize} /></div>}</div>
+                <div className="min-w-0"><p className="truncate font-semibold text-navy">{i.name}</p><div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground"><CodeInput item={i} onCode={onCode} /><Profit item={i} /></div><p className="mt-1 text-xs text-muted-foreground">{i.stock} in stock{i.color && ` · ${i.color}`} · cost {taka(i.costPrice)}</p>{(i.sizes?.length ?? 0) > 0 && <div className="mt-2"><SizePicker item={i} onSize={onSize} /></div>}</div>
                 <button onClick={() => onRemove(i.productId)} className="rounded-lg p-2 text-muted-foreground hover:bg-red-50 hover:text-red-600 cursor-pointer" aria-label="Remove"><Trash2 className="size-4" /></button>
               </div>
               <div className="flex items-center justify-between gap-2"><QtyControl item={i} onQty={onQty} /><PriceInput item={i} onPrice={onPrice} /><DiscountInput item={i} onDiscount={onDiscount} /><p className="font-bold tabular text-navy">{taka(lineTotal(i))}</p></div>

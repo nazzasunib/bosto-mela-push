@@ -50,6 +50,15 @@ export function POSScreen({ products }: { products: Product[] }) {
     else toast.error(`${matches[0].name} is inactive.`);
   }, [addProduct]);
 
+  const onCode = useCallback((id: string, code: string) => {
+    const r = cart.setCode(id, code);
+    const category = products.find((p) => p.id === id)?.category ?? "this category";
+    if (r.status === "switched" && r.product) toast.success(`${r.product.code} · ${r.product.name}`, { duration: 1500, description: `Cost ${taka(r.product.cost_price)} · ${r.product.stock_quantity} in stock` });
+    else if (r.status === "out") toast.error(`${category} ${code} is out of stock.`);
+    else if (r.status === "none") toast.error(`No ${category} with code ${code}${r.cost != null ? ` (cost ${taka(r.cost)})` : ""}.`, { description: "Add it from Products first." });
+    return r.status === "switched" || r.status === "same";
+  }, [cart, products]);
+
   const submit = useCallback(async () => {
     if (busy || cart.items.length === 0) return;
     const paid = cart.paid === "" ? cart.totals.total : Number(cart.paid);
@@ -93,7 +102,7 @@ export function POSScreen({ products }: { products: Product[] }) {
             <div className="flex items-center gap-2"><ShoppingCart className="size-4 text-blue" /><span className="font-bold text-navy">Cart</span><span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-royal">{cart.totals.items} items</span></div>
             {cart.items.length > 0 && <Button variant="ghost" size="sm" onClick={() => setConfirmClear(true)}><Eraser />Clear</Button>}
           </div>
-          <POSCart items={cart.items} lastAdded={lastAdded} onQty={cart.setQty} onSize={cart.setSize} onPrice={cart.setPrice} onDiscount={cart.setDiscount} onRemove={(id) => { cart.remove(id); focusSearch(); }} />
+          <POSCart items={cart.items} lastAdded={lastAdded} onQty={cart.setQty} onSize={cart.setSize} onCode={onCode} onPrice={cart.setPrice} onDiscount={cart.setDiscount} onRemove={(id) => { cart.remove(id); focusSearch(); }} />
         </div>
       </div>
 

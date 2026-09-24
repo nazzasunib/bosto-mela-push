@@ -2,7 +2,7 @@
 import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Barcode, CornerDownLeft, PackageSearch, ScanLine, Search } from "lucide-react";
-import { normalizeCode, parseMultiInput, parseQuantityInput } from "@/lib/code-parser";
+import { decodeCostCode, isCostCode, normalizeCode, parseMultiInput, parseQuantityInput } from "@/lib/code-parser";
 import { taka } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Product } from "@/lib/types";
@@ -20,7 +20,11 @@ function exactMatches(products: Product[], term: string): Product[] {
   if (!t) return [];
   const byBarcode = products.filter((p) => p.barcode && normalizeCode(p.barcode) === t);
   if (byBarcode.length) return byBarcode;
-  return products.filter((p) => normalizeCode(p.code) === t);
+  const byCode = products.filter((p) => normalizeCode(p.code) === t);
+  if (byCode.length || !isCostCode(t)) return byCode;
+  // a pure cost code (e.g. "BSSS") also finds every product that costs that much
+  const cost = decodeCostCode(t);
+  return products.filter((p) => p.cost_price === cost);
 }
 
 /** Nothing typed yet → browse list of every active product, in-stock first. */

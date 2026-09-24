@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { cartTotals, normalizeUnitPrice } from "@/lib/calc";
+import { decodeCostCode, matchCode } from "@/lib/code-parser";
 import { parseSizes } from "@/lib/format";
 import type { CartItem, PaymentMethod, Product } from "@/lib/types";
 
@@ -19,6 +20,8 @@ export const toCartItem = (p: Product, quantity: number): CartItem => ({
 });
 
 export type AddResult = { status: "added" | "capped" | "out"; quantity: number };
+export type CodeResult = { status: "same" | "switched" | "none" | "out"; product?: Product; cost?: number | null };
+
 
 function restore(products: Product[]): Draft {
   try {
@@ -71,13 +74,33 @@ export function useCart(products: Product[]) {
   }, [byId]);
   const setPrice = useCallback((id: string, price: number) => setDraft((d) => ({ ...d, items: d.items.map((i) => (i.productId === id ? { ...i, price: normalizeUnitPrice(price) } : i)) })), []);
   const setDiscount = useCallback((id: string, disc: number) => setDraft((d) => ({ ...d, items: d.items.map((i) => (i.productId === id ? { ...i, discount: Math.max(0, Math.min(disc || 0, i.price * i.quantity)) } : i)) })), []);
+  /** Re-point a cart line to the product of the same category that matches `code`; stock and cost follow the new product. */
+  const setCode = useCallback((id: string, code: string): CodeResult => {
+    const current = byId.get(id);
+    if (!current) return { status: "none" };
+    const matches = matchCode(products, current.category, code);
+    const cost = decodeCostCode(code);
+    if (matches.some((m) => m.id === id)) return { status: "same", product: current };
+    const next = matches.find((m) => m.stock_quantity > 0);
+    if (!next) return { status: matches.length ? "out" : "none", product: matches[0], cost };
+    setDraft((d) => {
+      const line = d.items.find((i) => i.productId === id);
+      if (!line) return d;
+      const other = d.items.find((i) => i.productId === next.id);
+      const quantity = Math.max(1, Math.min(line.quantity + (other?.quantity ?? 0), next.stock_quantity));
+      const sizes = parseSizes(next.size);
+      const merged: CartItem = { ...toCartItem(next, quantity), price: line.price || normalizeUnitPrice(next.selling_price), discount: line.discount, size: pickSize(sizes, line.size) };
+      return { ...d, items: d.items.flatMap((i) => (i.productId === id ? [merged] : i.productId === next.id ? [] : [i])) };
+    });
+    return { status: "switched", product: next };
+  }, [byId, products]);
   const setSize = useCallback((id: string, size: string) => setDraft((d) => ({ ...d, items: d.items.map((i) => (i.productId === id ? { ...i, size } : i)) })), []);
   const remove = useCallback((id: string) => setDraft((d) => ({ ...d, items: d.items.filter((i) => i.productId !== id) })), []);
   const clear = useCallback(() => setDraft(empty()), []);
   const patch = useCallback((p: Partial<Omit<Draft, "items" | "ref">>) => setDraft((d) => ({ ...d, ...p })), []);
 
   const totals = useMemo(() => cartTotals(items, draft.orderDiscount), [items, draft.orderDiscount]);
-  return { ...draft, items, totals, add, setQty, setPrice, setDiscount, setSize, remove, clear, patch };
+  return { ...draft, items, totals, add, setQty, setPrice, setDiscount, setSize, setCode, remove, clear, patch };
 }
 
 export type Cart = ReturnType<typeof useCart>;
