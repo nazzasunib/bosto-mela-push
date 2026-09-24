@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { decodeCostCode, encodeCostCode, isCostCode, parseMultiInput, parseQuantityInput } from "../code-parser";
-import { cartTotals, changeDue, lineProfit, netProfit, refundFor } from "../calc";
+import { cartTotals, changeDue, lineProfit, netProfit, normalizeUnitPrice, refundFor } from "../calc";
 import { addDays, dayStartISO, resolveRange } from "../dates";
 import type { CartItem } from "../types";
 
@@ -49,6 +49,12 @@ const item = (p: Partial<CartItem>): CartItem => ({ productId: "x", name: "n", c
 describe("sale & profit calculation", () => {
   it("matches the spec example", () => {
     expect(lineProfit(100, 180, 2)).toEqual({ revenue: 360, cost: 200, grossProfit: 160 });
+  });
+  it("accepts a custom sale price when the product has no fixed retail price", () => {
+    expect(normalizeUnitPrice(2000)).toBe(2000);
+    expect(normalizeUnitPrice(0)).toBe(0);
+    expect(normalizeUnitPrice(null)).toBe(0);
+    expect(lineProfit(1400, 2000, 1)).toEqual({ revenue: 2000, cost: 1400, grossProfit: 600 });
   });
   it("computes cart totals with discounts", () => {
     const t = cartTotals([item({ quantity: 2 }), item({ code: "RBS", costPrice: 210, price: 350, discount: 50 })], 30);

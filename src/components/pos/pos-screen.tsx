@@ -36,7 +36,8 @@ export function POSScreen({ products }: { products: Product[] }) {
     const r = cart.add(p, qty);
     if (r.status === "out") toast.error(`${p.name} (${p.code}) is out of stock.`);
     else if (r.status === "capped") toast.warning(`Only ${r.quantity} more of ${p.code} available — added ${r.quantity}.`);
-    else toast.success(`${p.code} × ${qty} added`, { duration: 1200, description: `${p.name} · ${taka(p.selling_price * qty)}` });
+    const defaultPrice = p.selling_price > 0 ? p.selling_price : 0;
+    toast.success(`${p.code} × ${qty} added`, { duration: 1200, description: `${p.name} · ${taka(defaultPrice * qty)}` });
     if (r.status !== "out") { setLastAdded(p.id); setTimeout(() => setLastAdded((x) => (x === p.id ? null : x)), 1200); }
     focusSearch();
   }, [cart, focusSearch]);
@@ -55,7 +56,7 @@ export function POSScreen({ products }: { products: Product[] }) {
     if (!Number.isFinite(paid) || paid < cart.totals.total) { toast.error("Amount paid is less than the total."); paidRef.current?.focus(); return; }
     setBusy(true);
     const res = await completeSale({
-      items: cart.items.map((i) => ({ productId: i.productId, quantity: i.quantity, discount: i.discount })),
+      items: cart.items.map((i) => ({ productId: i.productId, quantity: i.quantity, discount: i.discount, unitPrice: i.price })),
       orderDiscount: cart.orderDiscount, paymentMethod: cart.method, amountPaid: paid, customerPhone: cart.phone, clientRef: cart.ref,
     });
     setBusy(false);
@@ -92,7 +93,7 @@ export function POSScreen({ products }: { products: Product[] }) {
             <div className="flex items-center gap-2"><ShoppingCart className="size-4 text-blue" /><span className="font-bold text-navy">Cart</span><span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-royal">{cart.totals.items} items</span></div>
             {cart.items.length > 0 && <Button variant="ghost" size="sm" onClick={() => setConfirmClear(true)}><Eraser />Clear</Button>}
           </div>
-          <POSCart items={cart.items} lastAdded={lastAdded} onQty={cart.setQty} onDiscount={cart.setDiscount} onRemove={(id) => { cart.remove(id); focusSearch(); }} />
+          <POSCart items={cart.items} lastAdded={lastAdded} onQty={cart.setQty} onPrice={cart.setPrice} onDiscount={cart.setDiscount} onRemove={(id) => { cart.remove(id); focusSearch(); }} />
         </div>
       </div>
 

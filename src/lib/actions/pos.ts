@@ -9,7 +9,7 @@ const METHODS: PaymentMethod[] = ["cash", "bkash", "nagad", "card", "other"];
 const REASONS: ReturnReason[] = ["size_issue", "defective", "wrong_product", "changed_mind", "other"];
 
 export interface CompleteSaleInput {
-  items: { productId: string; quantity: number; discount: number }[];
+  items: { productId: string; quantity: number; discount: number; unitPrice?: number }[];
   orderDiscount: number; paymentMethod: PaymentMethod; amountPaid: number;
   customerName?: string; customerPhone?: string; note?: string; clientRef?: string;
 }
@@ -19,7 +19,12 @@ export async function completeSale(input: CompleteSaleInput): Promise<ActionResu
     const user = await actionUser();
     ensure(Array.isArray(input.items) && input.items.length > 0, "Cart is empty.");
     ensure(METHODS.includes(input.paymentMethod), "Choose a payment method.");
-    const items = input.items.map((i) => ({ product_id: i.productId, quantity: Math.trunc(numVal(i.quantity)), discount: Math.max(numVal(i.discount) || 0, 0) }));
+    const items = input.items.map((i) => ({
+      product_id: i.productId,
+      quantity: Math.trunc(numVal(i.quantity)),
+      discount: Math.max(numVal(i.discount) || 0, 0),
+      unit_price: Math.max(numVal(i.unitPrice ?? 0) || 0, 0),
+    }));
     ensure(items.every((i) => i.quantity > 0), "Every item needs a quantity of at least 1.");
     const { data, error } = await db().rpc("complete_sale", {
       p_items: items, p_order_discount: Math.max(numVal(input.orderDiscount) || 0, 0), p_payment_method: input.paymentMethod,

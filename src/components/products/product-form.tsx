@@ -27,8 +27,7 @@ export function ProductForm({ open, onOpenChange, product, categories }: { open:
 function ProductFormBody({ product, categories, onDone }: { product: Product | null; categories: string[]; onDone: () => void }) {
   const [f, setF] = useState({
     name: product?.name ?? "", code: product?.code ?? "", category: product?.category ?? "", size: product?.size ?? "", color: product?.color ?? "",
-    sellingPrice: product ? String(product.selling_price) : "", barcode: product?.barcode ?? "", imageUrl: product?.image_url ?? "",
-    status: (product?.status ?? "active") as ProductStatus, initialStock: "",
+    barcode: product?.barcode ?? "", imageUrl: product?.image_url ?? "", status: (product?.status ?? "active") as ProductStatus, initialStock: "",
   });
   const decodedInitial = product ? decodeCostCode(product.code) : null;
   const [manualCost, setManualCost] = useState(product ? decodedInitial !== product.cost_price : false);
@@ -40,8 +39,6 @@ function ProductFormBody({ product, categories, onDone }: { product: Product | n
 
   const decoded = decodeCostCode(f.code);
   const effectiveCost = manualCost ? Number(cost) : decoded;
-  const price = Number(f.sellingPrice);
-  const margin = effectiveCost !== null && Number.isFinite(effectiveCost) && price > 0 ? price - effectiveCost : null;
 
   const upload = async (file: File) => {
     setUploading(true);
@@ -55,9 +52,8 @@ function ProductFormBody({ product, categories, onDone }: { product: Product | n
     e.preventDefault();
     if (!f.name.trim() || !f.code.trim()) { toast.error("Name and code are required."); return; }
     if (effectiveCost === null || !Number.isFinite(effectiveCost)) { toast.error("Enter a valid cost code or a manual cost price."); return; }
-    if (!(price >= 0) || f.sellingPrice === "") { toast.error("Enter the selling price."); return; }
     setBusy(true);
-    const res = await saveProduct({ id: product?.id, ...f, costPrice: manualCost ? Number(cost) : null, sellingPrice: price, initialStock: Number(f.initialStock) || 0 });
+    const res = await saveProduct({ id: product?.id, ...f, costPrice: manualCost ? Number(cost) : null, sellingPrice: 0, initialStock: Number(f.initialStock) || 0 });
     setBusy(false);
     if (!res.ok) { toast.error(res.error); return; }
     toast.success(product ? "Product updated" : "Product added");
@@ -99,12 +95,9 @@ function ProductFormBody({ product, categories, onDone }: { product: Product | n
         </div>
       </div>
 
-      <div className="grid gap-4 rounded-2xl bg-secondary/60 p-4 sm:grid-cols-3">
+      <div className="grid gap-4 rounded-2xl bg-secondary/60 p-4 sm:grid-cols-2">
         <Field label="Cost price" htmlFor="p-cost" hint={<button type="button" className="font-semibold text-blue hover:underline cursor-pointer" onClick={() => { if (manualCost && decoded !== null) { setManualCost(false); } else { setManualCost(true); setCost(String(decoded ?? "")); } }}>{manualCost ? (decoded !== null ? "Use code price" : "Manual cost") : "Override manually"}</button>}>
           <Input id="p-cost" type="number" min={0} step="0.01" value={manualCost ? cost : decoded ?? ""} readOnly={!manualCost} onChange={(e) => setCost(e.target.value)} className={manualCost ? "border-amber-400" : "bg-muted font-semibold"} />
-        </Field>
-        <Field label="Selling price *" htmlFor="p-price" hint={margin !== null ? <span className={margin < 0 ? "text-red-600" : "text-emerald-700"}>Profit {taka(margin)} per item</span> : undefined}>
-          <Input id="p-price" type="number" min={0} step="0.01" value={f.sellingPrice} onChange={set("sellingPrice")} placeholder="0" className="font-semibold" required />
         </Field>
         {product ? (
           <Field label="Current stock" hint="Change stock from the Stock page"><Input value={product.stock_quantity} readOnly className="bg-muted" /></Field>

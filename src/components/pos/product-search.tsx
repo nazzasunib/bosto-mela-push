@@ -112,7 +112,7 @@ export const ProductSearch = forwardRef<ProductSearchHandle, Props>(function Pro
                         <p className="truncate text-xs text-muted-foreground"><span className="font-mono font-semibold text-royal">{p.code}</span>{p.size && ` · ${p.size}`}{p.color && ` · ${p.color}`}{p.barcode && ` · ${p.barcode}`}</p>
                       </div>
                       <div className="shrink-0 text-right">
-                        <p className="font-bold tabular text-navy">{taka(p.selling_price)}</p>
+                        <p className="font-bold tabular text-navy">{p.selling_price > 0 ? taka(p.selling_price) : "Custom"}</p>
                         <p className={cn("text-xs font-semibold", p.stock_quantity <= 0 ? "text-red-600" : "text-muted-foreground")}>{p.stock_quantity <= 0 ? "Out of stock" : `${p.stock_quantity} in stock`}</p>
                       </div>
                     </button>

@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { cartTotals } from "@/lib/calc";
+import { cartTotals, normalizeUnitPrice } from "@/lib/calc";
 import type { CartItem, PaymentMethod, Product } from "@/lib/types";
 
 const KEY = "bm.pos.draft.v1";
@@ -10,7 +10,7 @@ const newRef = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? 
 const empty = (): Draft => ({ ref: newRef(), items: [], orderDiscount: 0, method: "cash", paid: "", phone: "" });
 
 export const toCartItem = (p: Product, quantity: number): CartItem => ({
-  productId: p.id, name: p.name, code: p.code, size: p.size, color: p.color, costPrice: p.cost_price, price: p.selling_price,
+  productId: p.id, name: p.name, code: p.code, size: p.size, color: p.color, costPrice: p.cost_price, price: normalizeUnitPrice(p.selling_price),
   quantity, discount: 0, stock: p.stock_quantity, imageUrl: p.image_url,
 });
 
@@ -24,7 +24,7 @@ function restore(products: Product[]): Draft {
     const byId = new Map(products.map((p) => [p.id, p]));
     const items = (saved.items ?? []).flatMap((i) => {
       const p = byId.get(i.productId);
-      return p ? [{ ...i, name: p.name, price: p.selling_price, costPrice: p.cost_price, quantity: Math.max(1, Math.min(i.quantity, p.stock_quantity || i.quantity)) }] : [];
+      return p ? [{ ...i, name: p.name, price: normalizeUnitPrice(i.price || p.selling_price), costPrice: p.cost_price, quantity: Math.max(1, Math.min(i.quantity, p.stock_quantity || i.quantity)) }] : [];
     });
     return { ...empty(), ...saved, items, ref: saved.ref || newRef() };
   } catch {
@@ -64,13 +64,14 @@ export function useCart(products: Product[]) {
     const max = Math.max(byId.get(id)?.stock_quantity ?? 1, 1);
     setDraft((d) => ({ ...d, items: d.items.map((i) => (i.productId === id ? { ...i, quantity: Math.max(1, Math.min(Math.trunc(qty) || 1, max)) } : i)) }));
   }, [byId]);
+  const setPrice = useCallback((id: string, price: number) => setDraft((d) => ({ ...d, items: d.items.map((i) => (i.productId === id ? { ...i, price: normalizeUnitPrice(price) } : i)) })), []);
   const setDiscount = useCallback((id: string, disc: number) => setDraft((d) => ({ ...d, items: d.items.map((i) => (i.productId === id ? { ...i, discount: Math.max(0, Math.min(disc || 0, i.price * i.quantity)) } : i)) })), []);
   const remove = useCallback((id: string) => setDraft((d) => ({ ...d, items: d.items.filter((i) => i.productId !== id) })), []);
   const clear = useCallback(() => setDraft(empty()), []);
   const patch = useCallback((p: Partial<Omit<Draft, "items" | "ref">>) => setDraft((d) => ({ ...d, ...p })), []);
 
   const totals = useMemo(() => cartTotals(items, draft.orderDiscount), [items, draft.orderDiscount]);
-  return { ...draft, items, totals, add, setQty, setDiscount, remove, clear, patch };
+  return { ...draft, items, totals, add, setQty, setPrice, setDiscount, remove, clear, patch };
 }
 
 export type Cart = ReturnType<typeof useCart>;

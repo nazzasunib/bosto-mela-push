@@ -214,14 +214,14 @@ end $$;
 
 drop function if exists public.complete_sale(jsonb, numeric, text, numeric, uuid, text, text, text);
 -- Complete a sale: validates stock, stores sale + items, reduces stock, logs movements.
--- p_items: [{ "product_id": uuid, "quantity": int, "discount": number }]
+-- p_items: [{ "product_id": uuid, "quantity": int, "discount": number, "unit_price": number }]
 create or replace function public.complete_sale(
   p_items jsonb, p_order_discount numeric, p_payment_method text, p_amount_paid numeric,
   p_user uuid default null, p_customer_name text default null, p_customer_phone text default null, p_note text default null,
   p_client_ref uuid default null
 ) returns jsonb language plpgsql as $$
 declare
-  v_item jsonb; v_prod public.products%rowtype; v_qty int; v_disc numeric; v_line numeric;
+  v_item jsonb; v_prod public.products%rowtype; v_qty int; v_disc numeric; v_unit_price numeric; v_line numeric;
   v_subtotal numeric := 0; v_item_disc numeric := 0; v_after_items numeric := 0; v_order_disc numeric := greatest(coalesce(p_order_discount,0),0);
   v_total numeric; v_cost numeric := 0; v_sale_id uuid; v_invoice text; v_count int := 0; v_alloc numeric; v_alloc_left numeric; v_net numeric;
   v_idx int := 0; v_n int; v_new_stock int; v_existing public.sales%rowtype;
@@ -244,7 +244,8 @@ begin
     if not found then raise exception 'Product not found'; end if;
     if v_prod.status <> 'active' then raise exception 'Product % is inactive', v_prod.code; end if;
     if v_prod.stock_quantity < v_qty then raise exception 'Not enough stock for % (% available)', v_prod.name || ' [' || v_prod.code || ']', v_prod.stock_quantity; end if;
-    v_line := v_prod.selling_price * v_qty;
+    v_unit_price := greatest(coalesce((v_item->>'unit_price')::numeric, v_prod.selling_price), 0);
+    v_line := v_unit_price * v_qty;
     if v_disc > v_line then raise exception 'Discount is larger than item price for %', v_prod.code; end if;
     v_subtotal := v_subtotal + v_line; v_item_disc := v_item_disc + v_disc; v_cost := v_cost + v_prod.cost_price * v_qty; v_count := v_count + v_qty;
   end loop;
@@ -265,14 +266,15 @@ begin
     v_qty := (v_item->>'quantity')::int;
     v_disc := greatest(coalesce((v_item->>'discount')::numeric, 0), 0);
     select * into v_prod from public.products where id = (v_item->>'product_id')::uuid;
-    v_line := v_prod.selling_price * v_qty - v_disc;
+    v_unit_price := greatest(coalesce((v_item->>'unit_price')::numeric, v_prod.selling_price), 0);
+    v_line := v_unit_price * v_qty - v_disc;
     if v_idx = v_n then v_alloc := v_alloc_left;
     elsif v_after_items > 0 then v_alloc := round(v_order_disc * v_line / v_after_items, 2);
     else v_alloc := 0; end if;
     v_alloc := least(v_alloc, v_line); v_alloc_left := v_alloc_left - v_alloc;
     v_net := v_line - v_alloc;
     insert into public.sale_items (sale_id, product_id, product_name, product_code, size, color, quantity, unit_cost, unit_price, discount, line_total, net_total, cost_total, profit)
-    values (v_sale_id, v_prod.id, v_prod.name, v_prod.code, v_prod.size, v_prod.color, v_qty, v_prod.cost_price, v_prod.selling_price, v_disc, v_line, v_net, v_prod.cost_price * v_qty, v_net - v_prod.cost_price * v_qty);
+    values (v_sale_id, v_prod.id, v_prod.name, v_prod.code, v_prod.size, v_prod.color, v_qty, v_prod.cost_price, v_unit_price, v_disc, v_line, v_net, v_prod.cost_price * v_qty, v_net - v_prod.cost_price * v_qty);
     update public.products set stock_quantity = stock_quantity - v_qty, updated_at = now() where id = v_prod.id returning stock_quantity into v_new_stock;
     insert into public.stock_movements (product_id, quantity, type, reference, balance_after, user_id) values (v_prod.id, -v_qty, 'sale', v_invoice, v_new_stock, p_user);
   end loop;

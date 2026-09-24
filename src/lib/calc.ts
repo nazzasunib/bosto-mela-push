@@ -2,6 +2,11 @@ import type { CartItem } from "./types";
 
 export const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
+export function normalizeUnitPrice(price: number | null | undefined, fallback = 0): number {
+  const val = Number(price ?? fallback);
+  return Number.isFinite(val) && val >= 0 ? round2(val) : 0;
+}
+
 export function lineTotal(item: Pick<CartItem, "price" | "quantity" | "discount">): number {
   return round2(Math.max(item.price * item.quantity - item.discount, 0));
 }

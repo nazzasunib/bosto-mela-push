@@ -15,7 +15,7 @@ export function VariantPicker({ options, quantity, onPick, onClose }: { options:
             <button key={p.id} autoFocus={i === 0} disabled={p.stock_quantity <= 0} onClick={() => onPick(p)}
               className={cn("flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-3 text-left transition hover:border-blue hover:bg-accent focus-visible:border-blue focus-visible:bg-accent outline-none disabled:cursor-not-allowed disabled:opacity-50")}>
               <div className="min-w-0"><p className="truncate font-semibold text-navy">{p.name}</p><p className="text-xs text-muted-foreground">Size <b>{p.size || "—"}</b> · Color <b>{p.color || "—"}</b>{p.barcode && ` · ${p.barcode}`}</p></div>
-              <div className="shrink-0 text-right"><p className="font-bold tabular">{taka(p.selling_price)}</p><p className="text-xs text-muted-foreground">{p.stock_quantity} in stock</p></div>
+              <div className="shrink-0 text-right"><p className="font-bold tabular">{p.selling_price > 0 ? taka(p.selling_price) : "Custom"}</p><p className="text-xs text-muted-foreground">{p.stock_quantity} in stock</p></div>
             </button>
           ))}
         </div>

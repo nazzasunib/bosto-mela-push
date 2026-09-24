@@ -7,7 +7,7 @@ import type { ActionResult, ProductStatus } from "@/lib/types";
 
 export interface ProductInput {
   id?: string; name: string; code: string; category: string; size: string; color: string;
-  costPrice: number | null; sellingPrice: number; initialStock?: number; barcode: string; imageUrl: string; status: ProductStatus;
+  costPrice: number | null; sellingPrice?: number; initialStock?: number; barcode: string; imageUrl: string; status: ProductStatus;
 }
 
 export async function saveProduct(input: ProductInput): Promise<ActionResult<{ id: string }>> {
@@ -18,8 +18,7 @@ export async function saveProduct(input: ProductInput): Promise<ActionResult<{ i
     const decoded = decodeCostCode(code);
     const cost = input.costPrice === null || Number.isNaN(numVal(input.costPrice)) ? decoded : numVal(input.costPrice);
     ensure(cost !== null && cost >= 0, "Cost price is required (or use a valid cost code).");
-    const price = numVal(input.sellingPrice);
-    ensure(price >= 0, "Selling price is required.");
+    const price = Math.max(0, numVal(input.sellingPrice ?? 0));
     const row = {
       name, code, category: str(input.category, 60) || "General", size: str(input.size, 30), color: str(input.color, 40),
       cost_price: cost, selling_price: price, barcode: str(input.barcode, 64) || null, image_url: str(input.imageUrl, 500) || null,

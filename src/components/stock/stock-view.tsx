@@ -45,7 +45,7 @@ export function StockView({ products, movements, threshold, initialFilter }: { p
     { key: "color", header: "Color", cell: (p) => p.color || "—" },
     { key: "stock", header: "Current Stock", align: "right", cell: (p) => <b className={cn("text-base tabular", p.stock_quantity <= 0 ? "text-red-600" : p.stock_quantity <= threshold ? "text-amber-600" : "text-navy")}>{p.stock_quantity}</b> },
     { key: "cost", header: "Cost Price", align: "right", cell: (p) => <span className="tabular text-muted-foreground">{taka(p.cost_price)}</span> },
-    { key: "price", header: "Selling Price", align: "right", cell: (p) => <span className="tabular">{taka(p.selling_price)}</span> },
+    { key: "price", header: "Selling Price", align: "right", cell: (p) => <span className="tabular">{p.selling_price > 0 ? taka(p.selling_price) : "Custom"}</span> },
     { key: "value", header: "Stock Value", align: "right", cell: (p) => <span className="font-semibold tabular">{taka(Math.max(p.stock_quantity, 0) * p.cost_price)}</span> },
     { key: "status", header: "Status", cell: (p) => <StockBadge stock={p.stock_quantity} threshold={threshold} /> },
     { key: "act", header: "", align: "right", cell: (p) => <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setAdjusting(p); }}><SlidersHorizontal />Update</Button> },

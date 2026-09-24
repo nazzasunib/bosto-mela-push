@@ -47,7 +47,7 @@ export function ProductsView({ products, categories, threshold, isAdmin }: { pro
     { key: "size", header: "Size", cell: (p) => p.size || "—" },
     { key: "color", header: "Color", cell: (p) => p.color || "—" },
     { key: "cost", header: "Cost", align: "right", cell: (p) => <span className="tabular text-muted-foreground">{taka(p.cost_price)}</span> },
-    { key: "price", header: "Price", align: "right", cell: (p) => <span className="font-semibold tabular">{taka(p.selling_price)}</span> },
+    { key: "price", header: "Price", align: "right", cell: (p) => <span className="font-semibold tabular">{p.selling_price > 0 ? taka(p.selling_price) : "Custom"}</span> },
     { key: "stock", header: "Stock", align: "right", cell: (p) => <span className="inline-flex items-center gap-2"><b className="tabular">{p.stock_quantity}</b><StockBadge stock={p.stock_quantity} threshold={threshold} /></span> },
     { key: "barcode", header: "Barcode", cell: (p) => <span className="font-mono text-xs">{p.barcode || "—"}</span> },
     { key: "status", header: "Status", cell: (p) => <Badge variant={p.status === "active" ? "success" : "muted"}>{p.status === "active" ? "Active" : "Inactive"}</Badge> },
